@@ -1,7 +1,7 @@
 import cv2
 
 
-cap = cv2.VideoCapture("http://172.16.21.118:12346")  # Replace with server details
+cap = cv2.VideoCapture("http://172.16.78.17:12346")  # Replace with server details
 while True:
     ret, frame = cap.read()
     if not ret:

@@ -1,3 +1,4 @@
+#server.py
 import socket
 import threading
 import serial
@@ -5,6 +6,8 @@ import time
 import cv2
 import imutils
 import numpy as np
+import pickle
+import struct
 
 # Server Configuration
 HOST = "0.0.0.0"  # Listen on all interfaces
@@ -110,29 +113,26 @@ def video_stream():
             continue
 
         try:
-            while True:
+            while cap.isOpened():
                 ret, frame = cap.read()
                 if not ret:
+                    print("[ERROR] Failed to capture frame.")
                     break
 
-                frame = imutils.resize(frame, width=400)
-                _, encoded_frame = cv2.imencode('.jpg', frame)
-                data = np.array(encoded_frame)
-                string_data = data.tobytes()
+                data = pickle.dumps(frame)
+                message_size = struct.pack("Q", len(data))
                 
-                # Send frame size first
-                client_socket.sendall(len(string_data).to_bytes(4, 'big'))
-                client_socket.sendall(string_data)
-                # print(f"[INFO] Sending frame of size {len(string_data)} bytes")
+                try:
+                    client_socket.sendall(message_size + data)
+                except Exception as e:
+                    print(f"[ERROR] Video transmission error: {e}")
+                    break
         except (ConnectionResetError, BrokenPipeError):
             print(f"[VIDEO DISCONNECTED] {client_address} disconnected.")
         finally:
             cap.release()
             client_socket.close()
             
-        
-
-
 # Function to start the main server
 def start_server():
     """Starts the server."""

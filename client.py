@@ -4,6 +4,7 @@ import socket
 import cv2
 import numpy as np
 import sys
+import pickle
 import threading
 import struct
 from PyQt6.QtWidgets import (
@@ -14,7 +15,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QPixmap, QImage
 
 # Server Configuration
-SERVER_IP = " "  # Change this to your server's IP
+SERVER_IP = "172.16.21.118"  # Change this to your server's IP
 PORT = 12346
 
 class VideoStreamThread(QThread):
@@ -30,28 +31,45 @@ class VideoStreamThread(QThread):
             frame = self.receive_frame()
             if frame is not None:
                 self.update_frame_signal.emit(frame)
+            else:
+                self.running = False
+                break  # Stop the loop if no valid frame is received
 
+    
     def receive_frame(self):
         """Receive a frame from the server and decode it."""
         try:
+            # Ensure we receive the full message header (8 bytes for "Q" struct)
             data = b""
-            payload_size = struct.calcsize("Q")  # Expected size of message header
+            payload_size = struct.calcsize("Q")
+
             while len(data) < payload_size:
-                packet = self.client_socket.recv(4 * 1024)
+                packet = self.client_socket.recv(payload_size - len(data))
                 if not packet:
+                    print("No packet received, closing connection.")
                     return None
                 data += packet
 
+            # Extract message size
             packed_msg_size = data[:payload_size]
-            data = data[payload_size:]
             msg_size = struct.unpack("Q", packed_msg_size)[0]
 
-            while len(data) < msg_size:
-                data += self.client_socket.recv(4 * 1024)
+            # Validate message size (reasonable range check)
+            if msg_size <= 0 or msg_size > 10**7:  # Avoid unrealistic sizes
+                print(f"Invalid message size received: {msg_size}")
+                return None
 
-            frame_data = data[:msg_size]
-            frame = np.frombuffer(frame_data, dtype=np.uint8)
-            frame = cv2.imdecode(frame, cv2.IMREAD_COLOR)
+            # Receive the actual frame data
+            data = b""
+            while len(data) < msg_size:
+                packet = self.client_socket.recv(min(4096, msg_size - len(data)))
+                if not packet:
+                    print("No packet received, closing connection.")
+                    return None
+                data += packet
+
+            # Deserialize frame data
+            frame = pickle.loads(data)
 
             if frame is None:
                 print("Decoding failed")
@@ -63,6 +81,7 @@ class VideoStreamThread(QThread):
         except Exception as e:
             print(f"Error receiving frame: {e}")
             return None
+
 
     def stop(self):
         """Stop the thread."""
@@ -189,11 +208,11 @@ class DexArmControlPanel(QWidget):
 
     def update_camera(self, frame):
         """Update the camera display with the received frame."""
-        print("Updating camera feed")
+        # print("Updating camera feed")
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         height, width, channel = frame.shape
         bytes_per_line = 3 * width
-        q_img = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
+        q_img = QImage(frame.data.tobytes(), width, height, bytes_per_line, QImage.Format.Format_RGB888)
         pixmap = QPixmap.fromImage(q_img)
         self.camera_label.setPixmap(pixmap)
 
