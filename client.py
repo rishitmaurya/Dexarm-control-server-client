@@ -15,7 +15,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QPixmap, QImage
 
 # Server Configuration
-SERVER_IP = "172.16.21.118"  # Change this to your server's IP
+SERVER_IP = "172.16.52.52"  # Change this to your server's IP
 PORT = 12346
 
 class VideoStreamThread(QThread):
